@@ -1,0 +1,78 @@
+name: deploy-backend
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+env:
+  NODE_VERSION: '20.x'
+
+jobs:
+  # JOB 1: VERIFICACIÓN DE CÓDIGO (LINTING)
+  lint:
+    name: Lint Code
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run lint
+
+  # JOB 2: COMPILACIÓN DEL PROYECTO (BUILD)
+  build:
+    name: Build Application
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 1
+
+  # JOB 3: EJECUCIÓN DE PRUEBAS (TESTS)
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run test --passWithNoTests
+      - run: npm run test:cov --passWithNoTests
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 7
+  
+  # JOB 4: NOTIFICACIÓN DE ESTADO (OPCIONAL)
+  notify:
+    name: Notify Status
+    runs-on: ubuntu-latest
+    needs: [test]
+    if: always()
+    steps:
+      - run: echo "Pipeline execution completed for Marvin J. Pérez Vanegas!"
